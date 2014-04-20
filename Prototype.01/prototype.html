@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Prototype</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <style>
+        body, html {
+            height: 100%;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
+        .draggable {
+            cursor: move;
+        }
+
+        .firstcolumn {
+            width: 20%;
+            height: 100%;
+            float: left;
+        }
+
+        .firsthalf {
+            width: 100%;
+            height: 50%;
+        }
+
+        .secondcolumn {
+            width: 80%;
+            height: 100%;
+            float: left;
+        }
+    </style>
+</head>
+<body>
+<div class="firstcolumn">
+    <div class="firsthalf">
+        <div class="heading">Palette</div>
+        <div id="orangeCircle" ondragstart="return dragStart(event)" class="draggableElement" draggable="true">
+            orange circle
+        </div>
+        <div id="greyCircle" ondragstart="return dragStart(event)" class="draggableElement" draggable="true">
+            grey circle
+        </div>
+        <div id="blueCircle" ondragstart="return dragStart(event)" class="draggableElement" draggable="true">
+            blue circle
+        </div>
+        <input type="button" value="Speichern" onclick="saveModel()"/>
+        <input type="button" value="Reset" onclick="resetSvgDrawingArea()" />
+    </div>
+    <div id="savedModels" class="firsthalf">
+        <div class="heading">Gespeicherte Modelle</div>
+    </div>
+</div>
+<div id="workingArea" class="secondcolumn" ondragenter="return dragEnter(event)" ondrop="return dragDrop(event)"
+     ondragover="return dragOver(event)">
+</div>
+
+<script type="text/javascript">
+    var svgProvider = {};
+    svgProvider["orangeCircle"] = '<circle id="circle3" xmlns="http://www.w3.org/2000/svg" r="22" fill="orange" stroke="black" stroke-width="8"/>';
+    svgProvider["blueCircle"] = '<circle xmlns="http://www.w3.org/2000/svg" id="circle1" r="22" fill="blue" stroke="black" stroke-width="8"/>';
+    svgProvider["greyCircle"] = '<circle xmlns="http://www.w3.org/2000/svg" id="circle2" r="22" fill="grey" stroke="black" stroke-width="8"/>';
+    var parser = new DOMParser();
+    var db;
+    var currentModel;
+    var C;
+    var x1;
+    var y1;
+
+    /**
+     * This method is used to allow dragging from the palette to the working area. The elements, for which dragging
+     * should be possible, should call this method in the ondragstart event.
+     * @param {Object} ev The injected event
+     * @return true
+     */
+    function dragStart(ev) {
+        ev.dataTransfer.effectAllowed = 'move';
+        ev.dataTransfer.setData("Text", ev.target.getAttribute('id'));
+        ev.dataTransfer.setDragImage(ev.target, 100, 100);
+        console.log(ev);
+        return true;
+    }
+
+    /**
+     *  This method is used to detect dragging in an element. The considered element should call this in the
+     *  ondragenter event.
+     *  @param {Object} ev The injected event
+     *  @return true
+     */
+    function dragEnter(ev) {
+        ev.preventDefault();
+        return true;
+    }
+
+    /**
+     * This method is used to detect dragging over an element. The considered element should call this method in the
+     * ondragover event.
+     * @param {Object} ev The injected event
+     * @return void
+     */
+    function dragOver(ev) {
+        ev.preventDefault();
+    }
+
+    /**
+     * This function is used to drag and drop an element from the palette into the working area
+     * @param {Object} ev
+     * @return false
+     */
+    function dragDrop(ev) {
+        // now we will try to load a svg element and add it to the working area
+        var workingArea = document.getElementById('workingArea');
+        var svgWorkingArea = document.getElementById('headSvg');
+        var svgElement = parser.parseFromString(svgProvider[ev.dataTransfer.getData("Text")], "image/svg+xml").documentElement;
+        var svgPosition = getPos(workingArea);
+        svgElement.setAttribute('cx', ev.clientX - svgPosition[0]);
+        svgElement.setAttribute('cy', ev.clientY - svgPosition[1]);
+        svgElement.setAttribute('onmousedown', "startMove(evt)");
+        svgElement.setAttribute('onmouseup', "endMove()");
+        svgElement.setAttribute('class', "draggable");
+        svgElement.setAttribute('transform', "translate(0 0)");
+        svgWorkingArea.appendChild(svgElement);
+        ev.stopPropagation();
+        return false;
+    }
+
+    /**
+     * Helper function for the dragDrop(ev): Gets the current x and y coordinates of the mouse, so the element
+     * is dropped into the working area on the position of the mouse cursor
+     * @param {Object} ele The DOM Element
+     * @return {Object} An array, containing the x and y coordinates [x, y]
+     */
+    function getPos(ele) {
+        var x = 0;
+        var y = 0;
+        while (true) {
+            x += ele.offsetLeft;
+            y += ele.offsetTop;
+            if (ele.offsetParent === null) {
+                break;
+            }
+            ele = ele.offsetParent;
+        }
+        return [x, y];
+    }
+
+    /**
+     * This function is used for elements, when they are dragged inside the workingArea. In the SVG element this
+     * function should be called in the onmousedown event
+     * @param {Object} evt The injected event
+     * @return void
+     */
+    function startMove(evt) {
+        x1 = evt.clientX;
+        y1 = evt.clientY;
+        var headSvgElement = document.getElementById('headSvg');
+        headSvgElement.setAttributeNS(null, "onmousemove", "moveIt(evt)");
+        C = evt.target;
+    }
+
+    /**
+     * This method is used for elements, when they are dragged inside the workingArea. It is attached to the main SVG
+     * element in the startMove method, when dragging is detected.
+     * @param {Object} evt the injected event
+     * @return void
+     */
+    function moveIt(evt) {
+        var translation = C.getAttributeNS(null, "transform").slice(10, -1).split(' ');
+        var sx = parseInt(translation[0]);
+        var sy = parseInt(translation[1]);
+        C.setAttributeNS(null, "transform", "translate(" + (sx + evt.clientX - x1) + " " + (sy + evt.clientY - y1) + ")");
+        x1 = evt.clientX;
+        y1 = evt.clientY;
+    }
+
+    /**
+     * This method is used to detect the end of a dragging movement in the workingArea. In the SVG element this method
+     * should be called in the onmouseup event.
+     * @return void
+     */
+    function endMove() {
+        var headSvgElement = document.getElementById('headSvg');
+        headSvgElement.setAttributeNS(null, "onmousemove", null);
+    }
+
+    /**
+     * This method saves the current open model. A popup prompt will open and ask the user to enter a name for the
+     * model to be saved. If such a model name already exists in the db, the existing model will be overwritten
+     * @return void
+     */
+    function saveModel() {
+        var svgToSave = document.getElementById('headSvg');
+        var serializer = new XMLSerializer();
+        var modelName = prompt("Bitte geben Sie einen Namen für das Modell ein. Falls Sie den Namen eines bereits" +
+                "bestehenden Modells eingeben, wird es überschrieben.");
+        var trans = db.transaction(["model"], "readwrite");
+        var store = trans.objectStore("model");
+        var requestPut = store.put({
+            "title": modelName,
+            "svgelement": serializer.serializeToString(svgToSave)
+        });
+
+        requestPut.onsuccess = function (event) {
+            currentModel = modelName;
+            onPageLoadProcedure();
+        };
+        requestPut.onerror = function (event) {
+            console.log(event);
+        };
+    }
+
+    /**
+     * This method loads a model from the database into the working area. The expected parameter is the injected event
+     * object
+     * @param {Object} evt
+     * @return void
+     */
+    function loadModel(evt) {
+        var trans = db.transaction(["model"]);
+        var store = trans.objectStore("model");
+        var requestGet = store.get(evt.target.id);
+        requestGet.onsuccess = function (event) {
+            //svg in die work area laden
+            var svgArea = parser.parseFromString(requestGet.result.svgelement, "image/svg+xml").documentElement;
+            var workingArea = document.getElementById('workingArea');
+            while (workingArea.firstChild) {
+                workingArea.removeChild(workingArea.firstChild);
+            }
+            workingArea.appendChild(svgArea);
+            // reference the current open model to the global var
+            currentModel = evt.target.id;
+        };
+        requestGet.onerror = function (event) {
+            console.log("Problem");
+            console.log(event);
+        };
+    }
+
+    /**
+     * This method deletes a model from the saved models which are shown in the view. If the model is deleted, which
+     * is currently opened in the working area, the working area will also reset.
+     * @param {Object} evt
+     * @return void
+     */
+    function deleteModel(evt) {
+        //delete model and redraw the
+        var trans = db.transaction(["model"], "readwrite");
+        var store = trans.objectStore("model");
+        var requestDelete = store.delete(evt.target.id);
+        requestDelete.onerror = function(event) {
+            console.log(event);
+        };
+        requestDelete.onsuccess = function(event) {
+            if (currentModel === evt.target.id)
+                resetSvgDrawingArea();
+            onPageLoadProcedure();
+        };
+    }
+
+    /**
+     * This method is used as the procedure, which should be called when the page is loaded.
+     * It mounts the indexeddb to the variable db and loads the saved models
+     * @return void
+     */
+    function onPageLoadProcedure() {
+        var requestInitial = window.indexedDB.open("Prototype", 1);
+        requestInitial.onerror = function (event) {
+            console.log(event);
+        };
+        requestInitial.onsuccess = function (event) {
+            db = event.target.result;
+            refreshSavedModelsSection();
+        };
+        requestInitial.onupgradeneeded = function (event) {
+            var dbtemp = event.target.result;
+            var objectStore = dbtemp.createObjectStore("model", {keyPath: "title"});
+            alert('Datenbank wurde im Browser für den Prototypen erstellt.');
+        };
+    }
+
+    /**
+     * This method is used to reset the lightblue drawing space, it will remove any of the svg elements
+     * which are currently there.
+     */
+    function resetSvgDrawingArea() {
+        var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+        svg.setAttribute("id", "headSvg");
+        svg.setAttribute("height", "100%");
+        svg.setAttribute("width", "100%");
+        svg.setAttributeNS("http://www.w3.org/2000/xmlns/", "xmlns:xlink", "http://www.w3.org/1999/xlink");
+        var rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        rect.setAttribute("x", "0");
+        rect.setAttribute("y", "0");
+        rect.setAttribute("width", "100%");
+        rect.setAttribute("height", "100%");
+        rect.setAttribute("fill", "lightblue");
+        svg.appendChild(rect);
+        var workingArea = document.getElementById('workingArea');
+        while (workingArea.firstChild) {
+            workingArea.removeChild(workingArea.firstChild);
+        }
+        workingArea.appendChild(svg);
+    }
+
+    /**
+     * This method is used to refresh the area on the site, which shows all saved models.
+     * Should be called, after a new model is saved or after a model is deleted, so the user
+     * sees the changed.
+     * @return void
+     */
+    function refreshSavedModelsSection() {
+        // remove all child elements of the div containing the saved models
+        var savedModelsDiv = document.getElementById('savedModels');
+        while (savedModelsDiv.firstChild) {
+            savedModelsDiv.removeChild(savedModelsDiv.firstChild);
+        }
+        var headingDiv = document.createElement('div');
+        headingDiv.setAttribute('class', 'heading');
+        headingDiv.innerHTML = 'Gespeicherte Modelle';
+        savedModelsDiv.appendChild(headingDiv);
+        var trans = db.transaction(["model"]);
+        var store = trans.objectStore("model");
+        var cursors = store.openCursor();
+        cursors.onsuccess = function (e) {
+            var cursor = e.target.result;
+            if (cursor) {
+                //console.log(cursor);
+                var savedModels = document.getElementById('savedModels');
+                var newEntry = document.createElement('div');
+                newEntry.innerHTML = cursor.value.title;
+                var loadButton = document.createElement('input');
+                loadButton.setAttribute('type', 'button');
+                loadButton.setAttribute('onclick', "loadModel(event)");
+                loadButton.setAttribute('value', 'Laden');
+                loadButton.setAttribute('id', cursor.value.title);
+                newEntry.appendChild(loadButton);
+                var deleteButton = document.createElement('input');
+                deleteButton.setAttribute('type', 'button');
+                deleteButton.setAttribute('onclick', 'deleteModel(event)');
+                deleteButton.setAttribute('value', 'Löschen');
+                deleteButton.setAttribute('id', cursor.value.title);
+                newEntry.appendChild(deleteButton);
+                savedModels.appendChild(newEntry);
+                cursor.continue();
+            }
+        };
+    }
+
+    onPageLoadProcedure();
+    resetSvgDrawingArea();
+
+</script>
+</body>
+</html>
